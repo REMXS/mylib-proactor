@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 23)
 
 aux_source_directory(./ SRC)
 find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBURING REQUIRED liburing)
 
 add_library(mylib_proactor SHARED)
 
