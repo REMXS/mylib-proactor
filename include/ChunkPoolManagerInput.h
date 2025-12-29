@@ -13,7 +13,7 @@ class IoUringLoop;
 struct ChunkPoolManagerInput
 {
     ChunkPool pool_;    //具体的内存池
-    IoUringLoop& io_context_;
+    IoUringLoop& loop_;
 
     std::vector<Chunk>chunks_data_;      //所有chunk对象，chunk元数据,按序号排序
 
@@ -24,9 +24,7 @@ struct ChunkPoolManagerInput
     io_uring_buf_reg reg_;
     uint16_t count_;
 
-    ChunkPoolManagerInput(IoUringLoop& io_context);
-
-
+    ChunkPoolManagerInput(IoUringLoop& loop_);
 
     ~ChunkPoolManagerInput();
 
@@ -34,4 +32,6 @@ struct ChunkPoolManagerInput
     Chunk* getChunkById(uint16_t id);
 
     void returnOneChunk(Chunk* chunk);
+
+    inline uint16_t get_buf_group_id()const {return reg_.bgid;}
 };

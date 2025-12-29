@@ -27,3 +27,5 @@ build/
 bin/
 
 lib/
+
+temp_doc/

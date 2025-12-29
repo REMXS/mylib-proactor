@@ -4,19 +4,18 @@
 
 
 //注意：io_uring中的buffer ring 大小必须是2的幂
-constexpr size_t CHUNK_SIZE = 4096; // 4KB
-constexpr size_t POOL_SIZE = 4096 * 4096 * 4; // 64MB 预注册内存
+constexpr size_t CHUNK_SIZE = 16; // 4KB
+constexpr size_t POOL_SIZE = 16*64; // 64MB 预注册内存
 
 //链表的节点
 struct Chunk
 {
     char* data_ptr_;    //具体的内存地址
     uint16_t index_;    //这个内存的编号
-    Chunk* next_;       //链表指针，指向下一个chunk的地址
-    size_t head_;       //数据起始的偏移量
-    size_t tail_;       //数据结束时的偏移量
+    Chunk* next_=nullptr; //链表指针，指向下一个chunk的地址
+    size_t head_=0;       //数据起始的偏移量
+    size_t tail_=0;       //数据结束时的偏移量
 
-    Chunk(){}
     Chunk(char* data_ptr,uint16_t idx)
         :data_ptr_(data_ptr)
         ,index_(idx)

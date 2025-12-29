@@ -27,7 +27,8 @@ struct TxFragment
         :ptr_(nullptr)
         ,len_(0)
         ,written_(0)
-        ,guard_(nullptr) 
+        ,guard_(nullptr)
+        ,next_(nullptr) 
     {}
 
     const char* beginRead()const {return ptr_+written_;}
@@ -78,6 +79,19 @@ private:
     }
 
 public:
+    SendQueue()
+        : head_(nullptr)
+        , tail_(nullptr)
+        , curr_(nullptr)
+        , slice_size_(0)
+        , total_len_(0)
+    {}
+
+    ~SendQueue()
+    {
+        while (head_) pop_front();
+    }
+
     // C++20: 仅接受拥有内存且连续的缓冲类型
     template <typename Buffer>
     //移除const volatile 修饰
@@ -135,13 +149,14 @@ public:
         {
             size_t offset = std::min(head_->remainData(),len-written);
             head_->written_+=offset;
+            written += offset;
             if(head_->written_==head_->len_)
             {
                 pop_front();
             }
         }
         curr_ = head_;
-        total_len_ -=written;
+        total_len_ -= written;
     }
 
     bool isEmpty()const {return total_len_==0;}
