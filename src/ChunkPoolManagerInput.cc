@@ -25,6 +25,7 @@ ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
     //注册buffer ring
 
     //分配buffer ring 的内存
+    //检测chunk的数量是否为2的幂
     if ((pool_.chunks_ & (pool_.chunks_ - 1)) != 0) {
         std::cerr << "pool_.chunks_ must be power of two for buf ring\n";
         exit(1);
@@ -45,6 +46,7 @@ ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
     input_buf_ring_mask_ = io_uring_buf_ring_mask(pool_.chunks_);
 
     //配置io_uring_buf_reg 相关信息
+    //这里一定要记得清零，否则reg_中的一些变量的值就是随机的一些数，在注册buffer ring时就会出现invaild argument错误
     memset(&reg_, 0, sizeof(reg_));
     reg_.ring_addr = (uint64_t)input_buf_ring_;
     reg_.ring_entries = pool_.chunks_;

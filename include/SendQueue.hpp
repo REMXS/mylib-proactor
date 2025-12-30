@@ -110,6 +110,7 @@ public:
 
         total_len_ += data.size();
     }
+
     void append(const char*data,size_t len)
     {
         push_back();
@@ -121,7 +122,6 @@ public:
         total_len_ += len;
     }
 
-
     iovec getOneIovec()
     {
         if(!curr_) return iovec{};
@@ -131,6 +131,8 @@ public:
         curr_ = curr_->next_;
         return ret;
     }
+
+    //要求传入的iovecs为空，否则可能会重复发送
     void getBatchFragment(std::vector<iovec>&iovecs,size_t max_count)
     {
         size_t i =0;
@@ -161,4 +163,5 @@ public:
 
     bool isEmpty()const {return total_len_==0;}
 
+    size_t getTotalLen()const {return total_len_;}
 };
