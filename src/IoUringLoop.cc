@@ -196,7 +196,7 @@ void IoUringLoop::loop()
             //这里可以再做一层封装，比如调用一个函数返回IoContext数组，这里针对io_uring进行特化了
             //但是考虑到上层的connection也要针对io_uring 单独设计，所以这样写感觉还可以
             auto&cqe=cqes_[i];
-            //如果user_data为0，则说明这是一个取消任务等不需要任何cqe功能的任务
+            //如果user_data为0，则说明这是一个取消任务等不需要任何cqe功能的任务,没有上下文
             if(cqe->user_data==0) continue;
 
             IoContext*context = reinterpret_cast<IoContext*>(cqe->user_data);
@@ -307,6 +307,20 @@ void IoUringLoop::submitAcceptMultishut(IoContext* ctx)
     {
         _submitAcceptMultishut(ctx);
     }
+}
+
+void IoUringLoop::submitCancel(IoContext *ctx)
+{
+    auto sqe = getIoUringSqe(true);
+
+    //这里如果sqe获取失败，直接设置错误码，然后调用on_completion 函数处理错误关闭连接
+    assert(sqe&&"sqe should not be nullptr");
+
+    io_uring_prep_cancel(sqe,ctx,0);
+    io_uring_sqe_set_data(sqe,0);   //设置data字段为0，表示这个sqe没有上下文
+
+    //这个请求时紧急请求，立即向内核提交一次
+    io_uring_submit(ring_);
 }
 
 void IoUringLoop::doingPendingFunctors()

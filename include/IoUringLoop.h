@@ -101,8 +101,10 @@ public:
     void submitReadMultishut(IoContext* ctx);
     void submitWriteMsg(IoContext* ctx);
     void submitAcceptMultishut(IoContext* ctx);
+    void submitCancel(IoContext* ctx);
 
     uint32_t remainedSqe()const {return io_uring_sq_space_left(ring_);}
 
+    ChunkPoolManagerInput& getInputPool() {return *input_chunk_manager_;}
 };
 

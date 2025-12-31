@@ -14,7 +14,6 @@ struct ReadContext:public IoContext
     InputChainBuffer input_buffer_; //输入缓冲区
     size_t high_water_mark_;//高水位阈值
     size_t high_water_mark_chunk_;//chunk的高水位阈值，如果占用的chunk过多也停止接收数据
-    size_t low_water_mark_; //低水位阈值 
 
     //这里只是持有fd用于提交，并不管理这个fd，fd的管理有连接类进行管理
     int fd_;
@@ -28,11 +27,15 @@ struct ReadContext:public IoContext
     };
     ReadStatus status_;
     
-    ReadContext();
+    ReadContext(size_t high_water_mark,size_t high_water_mark_chunk,int fd,ChunkPoolManagerInput&manager);
     ~ReadContext();
     
-    void handleClose();
+    bool handleError();
 
     void on_completion()override;
 
+    inline bool overLoad()const
+    {return input_buffer_.getTotalLen()>high_water_mark_||input_buffer_.getTotalLen()>high_water_mark_chunk_;}
+
+    inline bool isEmpty()const {return input_buffer_.getTotalLen()==0;}
 };

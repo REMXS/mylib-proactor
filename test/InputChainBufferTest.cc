@@ -48,7 +48,7 @@ TEST_F(InputChainBufferTest, PeekOnEmptyBuffer)
     auto [ptr, size] = icb_->peek();
     EXPECT_EQ(ptr, nullptr);
     EXPECT_EQ(size, 0);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试2：单个chunk的append和peek
@@ -64,7 +64,7 @@ TEST_F(InputChainBufferTest, AppendAndPeekSingleChunk)
     auto [ptr, size] = icb_->peek();
     EXPECT_NE(ptr, nullptr);
     EXPECT_EQ(size, data_len);
-    EXPECT_EQ(icb_->data_size(), data_len);
+    EXPECT_EQ(icb_->getTotalLen(), data_len);
 }
 
 // 测试3：remove操作-部分数据读取
@@ -74,12 +74,12 @@ TEST_F(InputChainBufferTest, RemovePartialData)
     int data_len = 10;
     
     icb_->append(index, data_len);
-    EXPECT_EQ(icb_->data_size(), data_len);
+    EXPECT_EQ(icb_->getTotalLen(), data_len);
 
     char buffer[5];
     size_t read = icb_->remove(buffer, 5);
     EXPECT_EQ(read, 5);
-    EXPECT_EQ(icb_->data_size(), 5);
+    EXPECT_EQ(icb_->getTotalLen(), 5);
 }
 
 // 测试4：remove操作-全部数据读取
@@ -93,7 +93,7 @@ TEST_F(InputChainBufferTest, RemoveAllData)
     char buffer[15];
     size_t read = icb_->remove(buffer, 15);
     EXPECT_EQ(read, data_len);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试5：retrieve操作
@@ -103,13 +103,13 @@ TEST_F(InputChainBufferTest, RetrieveData)
     int data_len = 20;
     
     icb_->append(index, data_len);
-    EXPECT_EQ(icb_->data_size(), data_len);
+    EXPECT_EQ(icb_->getTotalLen(), data_len);
 
     icb_->retrieve(10);
-    EXPECT_EQ(icb_->data_size(), 10);
+    EXPECT_EQ(icb_->getTotalLen(), 10);
 
     icb_->retrieve(10);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试6：多个chunk的append
@@ -121,10 +121,10 @@ TEST_F(InputChainBufferTest, AppendMultipleChunks)
     int len2 = 15;
 
     icb_->append(index1, len1);
-    EXPECT_EQ(icb_->data_size(), len1);
+    EXPECT_EQ(icb_->getTotalLen(), len1);
 
     icb_->append(index2, len2);
-    EXPECT_EQ(icb_->data_size(), len1 + len2);
+    EXPECT_EQ(icb_->getTotalLen(), len1 + len2);
 }
 
 // 测试7：remove跨越多个chunk
@@ -134,12 +134,12 @@ TEST_F(InputChainBufferTest, RemoveAcrossMultipleChunks)
     icb_->append(1, 15);
     icb_->append(2, 20);
     
-    EXPECT_EQ(icb_->data_size(), 45);
+    EXPECT_EQ(icb_->getTotalLen(), 45);
 
     char buffer[30];
     size_t read = icb_->remove(buffer, 30);
     EXPECT_EQ(read, 30);
-    EXPECT_EQ(icb_->data_size(), 15);
+    EXPECT_EQ(icb_->getTotalLen(), 15);
 }
 
 // 测试8：removeAsString操作
@@ -149,7 +149,7 @@ TEST_F(InputChainBufferTest, RemoveAsString)
     
     std::string result = icb_->removeAsString(5);
     EXPECT_EQ(result.size(), 5);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试9：removeAllAsString操作
@@ -160,7 +160,7 @@ TEST_F(InputChainBufferTest, RemoveAllAsString)
     
     std::string result = icb_->removeAllAsString();
     EXPECT_EQ(result.size(), 25);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试10：remove超过可用数据量
@@ -171,7 +171,7 @@ TEST_F(InputChainBufferTest, RemoveMoreThanAvailable)
     char buffer[20];
     size_t read = icb_->remove(buffer, 20);
     EXPECT_EQ(read, 10);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试11：retrieve超过可用数据量
@@ -180,7 +180,7 @@ TEST_F(InputChainBufferTest, RetrieveMoreThanAvailable)
     icb_->append(0, 10);
     
     icb_->retrieve(20);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试12：交替的append和remove
@@ -190,28 +190,28 @@ TEST_F(InputChainBufferTest, InterleavedAppendAndRemove)
     
     char buffer1[5];
     icb_->remove(buffer1, 5);
-    EXPECT_EQ(icb_->data_size(), 5);
+    EXPECT_EQ(icb_->getTotalLen(), 5);
 
     icb_->append(1, 15);
-    EXPECT_EQ(icb_->data_size(), 20);
+    EXPECT_EQ(icb_->getTotalLen(), 20);
 
     char buffer2[20];
     size_t read = icb_->remove(buffer2, 20);
     EXPECT_EQ(read, 20);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试13：peek不影响数据
 TEST_F(InputChainBufferTest, PeekDoesNotModifyData)
 {
     icb_->append(0, 10);
-    size_t initial_size = icb_->data_size();
+    size_t initial_size = icb_->getTotalLen();
 
     auto [ptr1, size1] = icb_->peek();
     auto [ptr2, size2] = icb_->peek();
 
     EXPECT_EQ(size1, size2);
-    EXPECT_EQ(icb_->data_size(), initial_size);
+    EXPECT_EQ(icb_->getTotalLen(), initial_size);
 }
 
 // 测试14：空缓冲区的remove
@@ -220,12 +220,12 @@ TEST_F(InputChainBufferTest, RemoveOnEmptyBuffer)
     char buffer[10];
     size_t read = icb_->remove(buffer, 10);
     EXPECT_EQ(read, 0);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }
 
 // 测试15：空缓冲区的retrieve
 TEST_F(InputChainBufferTest, RetrieveOnEmptyBuffer)
 {
     icb_->retrieve(10);
-    EXPECT_EQ(icb_->data_size(), 0);
+    EXPECT_EQ(icb_->getTotalLen(), 0);
 }

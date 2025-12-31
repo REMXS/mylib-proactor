@@ -16,7 +16,6 @@ struct WriteContext:public IoContext
     std::coroutine_handle<>write_handle_;//业务协程的句柄
     SendQueue output_buffer_;//输出缓冲区
     size_t high_water_mark_;//高水位阈值
-    size_t low_water_mark_; //低水位阈值
 
     //这里只是持有fd用于提交，并不管理这个fd，fd的管理有连接类进行管理
     int fd_;
@@ -26,7 +25,7 @@ struct WriteContext:public IoContext
     size_t max_slices_;             //一次性发送的最大的slices数量
     std::vector<iovec>temp_data_;   //交给cqe发送但是还有没回来的iovec
 
-    WriteContext(size_t high_water_mark,size_t low_water_mark,int fd,size_t max_slices =256);
+    WriteContext(size_t high_water_mark,int fd,size_t max_slices =256);
     ~WriteContext();
 
     //批量提取数据提交数据到io_uring中
@@ -41,7 +40,5 @@ struct WriteContext:public IoContext
     bool isError()const {return is_error_;}
 
     bool overLoad()const {return output_buffer_.getTotalLen()>high_water_mark_;}
-
-    bool underLoad()const {return output_buffer_.getTotalLen()<low_water_mark_;}
     //iovec* retrieveTempData();
 };

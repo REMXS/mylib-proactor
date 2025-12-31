@@ -4,9 +4,8 @@
 #include "TcpConnection.h"
 #include "Logger.h"
 
-WriteContext::WriteContext(size_t high_water_mark,size_t low_water_mark,int fd,size_t max_slices)
+WriteContext::WriteContext(size_t high_water_mark,int fd,size_t max_slices)
     :high_water_mark_(high_water_mark)
-    ,low_water_mark_(low_water_mark)
     ,max_slices_(max_slices)
     ,fd_(fd)
     ,holder_(nullptr)
@@ -116,8 +115,8 @@ void WriteContext::on_completion()
         output_buffer_.retrieve(res_);
     }
 
-    //判断缓冲区的大小是否超过低水位线，如果超过，就继续发送，否则停止发送，等待协程写入一定数据
-    if(output_buffer_.getTotalLen()>low_water_mark_)
+    //如果缓冲区中有数据，就发送
+    if(output_buffer_.getTotalLen()>0)
     {
         flush();
     }

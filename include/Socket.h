@@ -11,6 +11,7 @@ class Socket:noncopyable
 {
 private:
     const int socketfd_;
+    bool closed_;   //标识连接是否关闭
 public:
     explicit Socket(int socketfd);
     ~Socket();
@@ -27,6 +28,7 @@ public:
 
     //关闭fd的写端，但是fd还可以进行读操作
     void shutDownWrite();
+    void close();
     
     void setTcpNoDelay(bool on);
     void setReuseAddr(bool on);

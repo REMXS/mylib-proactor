@@ -11,12 +11,13 @@
 
 Socket::Socket(int socketfd)
     :socketfd_(socketfd)
+    ,closed_(false)
 {
 }
 
 Socket::~Socket()
 {
-    ::close(socketfd_);
+    close();
 }
 
 void Socket::listen()
@@ -63,6 +64,14 @@ void Socket::shutDownWrite()
     }
 }
 
+void Socket::close()
+{
+    if(!closed_)
+    {
+        ::close(socketfd_);
+        closed_ = true;
+    }
+}
 
 /*  这个选项用来控制是否启用 Nagle 算法 (Nagle's algorithm)。
 默认情况 (off / false): Nagle 算法是启用的。它的工作方式是：当程序要发送少量数据时（比如小于一个 MSS，最大分段大小），

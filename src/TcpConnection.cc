@@ -2,13 +2,28 @@
 
 #include "TcpConnection.h"
 #include "IoUringLoop.h"
+#include "Logger.h"
+
+void TcpConnection::handleClose()
+{
+    if(!closing_)
+    {
+        auto ptr = shared_from_this();
+        closing_ = true;
+        sock_.close();
+        if(close_callback_)
+        {
+            close_callback_(ptr);
+        }
+    }
+}
 
 void TcpConnection::sendInLoop(std::string data)
 {
     //向缓冲区中追加数据
     write_context_.output_buffer_.append(std::move(data));
 
-    //如果数据高于低水位线同时检查write_context中没有已经发送的sqe就发送，否则不发送
+    //如果检查write_context中没有已经发送的sqe就发送，否则已经有一个sqe发出去了，所以不发送
     if(!write_context_.is_sending_)
     {
         //先把智能指针赋值，保证生命周期，再发送数据
@@ -26,12 +41,115 @@ void TcpConnection::submitWrite(WriteContext *w_ctx)
 
 void TcpConnection::submitRead(ReadContext *r_ctx)
 {
-    loop_.submitReadMultishut(r_ctx);
+    read_context_.holder_ = shared_from_this();//设置holder
+    loop_.submitReadMultishut(r_ctx);           //提交任务
+    read_context_.status_ = ReadContext::ReadStatus::READING;//设置状态
+}
+
+void TcpConnection::submitCancel(ReadContext *r_ctx)
+{
+    loop_.submitCancel(r_ctx);
+}
+
+TcpConnection::TcpConnection(
+    std::string name, 
+    IoUringLoop&loop, 
+    Task<> task_handle, 
+    int sockfd, 
+    InetAddress local_addr, 
+    InetAddress peer_addr, 
+    size_t input_high_water_mark, 
+    size_t input_high_water_mark_chunk, 
+    size_t out_put_high_water_mark
+    )
+    :name_(name)
+    ,loop_(loop)
+    ,task_handle_(std::move(task_handle))
+    ,sock_(sockfd)
+    ,closing_(false)
+    ,local_addr_(std::move(local_addr))
+    ,peer_addr_(std::move(peer_addr))
+    ,read_context_(input_high_water_mark,input_high_water_mark_chunk,sockfd,loop.getInputPool())
+    ,write_context_(out_put_high_water_mark,sockfd)
+{
+    LOG_INFO("new TCP connection created, name=%s, fd=%d",name_.c_str(),sockfd)
+    sock_.setKeepAlive(true);
+}
+
+TcpConnection::~TcpConnection()
+{
+    LOG_INFO("TCP connection destroyed, name=%s, fd=%d",name_.c_str(),sock_.fd());
 }
 
 SendDataAwaiter TcpConnection::send(std::string data)
 {
     return SendDataAwaiter(this,std::move(data));
+}
+
+RecvDataAwaiter TcpConnection::PrepareToRead()
+{
+    return RecvDataAwaiter(this);
+}
+
+std::string TcpConnection::read(size_t size)
+{
+    return read_context_.input_buffer_.removeAsString(size);
+}
+
+std::pair<char *, size_t> TcpConnection::peek()
+{
+    return read_context_.input_buffer_.peek();
+}
+
+void TcpConnection::retrieve(size_t size)
+{
+    return read_context_.input_buffer_.retrieve(size);
+}
+
+bool RecvDataAwaiter::await_ready()
+{
+    //判断是否在当前的线程中，如果不在，直接挂起
+    if(!conn_->loop_.isInLoopThread()) return false;
+    //如果在loop线程，判断是否有数据可读，如果没有，就挂起
+    return !conn_->read_context_.isEmpty();
+}
+
+void RecvDataAwaiter::await_suspend(std::coroutine_handle<> h)
+{
+    //如果不在当前的任务队列向loop的任务队列提交任务
+    if(!conn_->loop_.isInLoopThread())
+    {
+        conn_->loop_.queueInLoop([h,this](){
+            if(conn_->read_context_.isEmpty())
+            {
+                conn_->read_context_.read_handle_ = h;
+                if(conn_->read_context_.status_== ReadContext::ReadStatus::STOPED){
+                    conn_->submitRead(&conn_->read_context_);
+                }
+            }
+            else
+            {
+                h.resume();
+            }
+        });
+    }
+    //如果在当前的线程且触发了这个函数，就代表输入缓冲区中无数据，提交读任务
+    else
+    {
+        //这里协程挂起了，只要是协程挂起就要把handle交到一个地方以防无法唤醒
+        conn_->read_context_.read_handle_ = h;
+        //如果没有在提交的任务，就提交任务
+        if(conn_->read_context_.status_== ReadContext::ReadStatus::STOPED)
+        {
+            conn_->submitRead(&conn_->read_context_);
+        }
+    }
+}
+
+int RecvDataAwaiter::await_resume()
+{
+    if(conn_->read_context_.is_error_) return -1;
+    return conn_->read_context_.input_buffer_.getTotalLen();
 }
 
 bool SendDataAwaiter::await_ready()
@@ -48,7 +166,6 @@ bool SendDataAwaiter::await_ready()
 
 void SendDataAwaiter::await_suspend(std::coroutine_handle<> h)
 {
-    conn_->write_context_.write_handle_ = h;
     //如果不在当前的任务队列向loop的任务队列提交任务
     if(!conn_->loop_.isInLoopThread())
     {
@@ -60,7 +177,16 @@ void SendDataAwaiter::await_suspend(std::coroutine_handle<> h)
             if(!conn_->write_context_.overLoad()){
                 h.resume();
             }
+            else{
+                //如果不在当前的线程，切换到loop的线程中再赋值，因为write_context_的数据访问必须是顺序的
+                //如果可以恢复就不要赋值，只有在准备挂起的时候再赋值，否则可能会导致协程的唤起顺序混乱
+                conn_->write_context_.write_handle_ = h;
+            }
         });
+    }
+    else
+    {
+        conn_->write_context_.write_handle_ = h;
     }
 }
 
@@ -69,3 +195,4 @@ bool SendDataAwaiter::await_resume()
 {
     return !conn_->write_context_.isError();
 }
+

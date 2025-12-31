@@ -46,5 +46,6 @@ public:
 
     void append(uint16_t index,int len);
 
-    size_t data_size()const {return total_len_;}
+    size_t getTotalLen()const {return total_len_;}
+
 };
