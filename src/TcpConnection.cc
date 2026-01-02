@@ -9,8 +9,16 @@ void TcpConnection::handleClose()
     if(!closing_)
     {
         auto ptr = shared_from_this();
+        LOG_DEBUG("the connection is closing fd= %d",sock_.fd());
         closing_ = true;
         sock_.close();
+
+        //销毁协程
+        task_handle_.destroy();
+        //将相关的资源置空
+        read_context_.read_handle_ = nullptr;
+        write_context_.write_handle_ = nullptr;
+
         if(close_callback_)
         {
             close_callback_(ptr);
@@ -54,7 +62,6 @@ void TcpConnection::submitCancel(ReadContext *r_ctx)
 TcpConnection::TcpConnection(
     std::string name, 
     IoUringLoop&loop, 
-    Task<> task_handle, 
     int sockfd, 
     InetAddress local_addr, 
     InetAddress peer_addr, 
@@ -64,7 +71,7 @@ TcpConnection::TcpConnection(
     )
     :name_(name)
     ,loop_(loop)
-    ,task_handle_(std::move(task_handle))
+    ,task_handle_(nullptr)
     ,sock_(sockfd)
     ,closing_(false)
     ,local_addr_(std::move(local_addr))
@@ -104,6 +111,13 @@ std::pair<char *, size_t> TcpConnection::peek()
 void TcpConnection::retrieve(size_t size)
 {
     return read_context_.input_buffer_.retrieve(size);
+}
+
+void TcpConnection::Established(Task<> task_handle)
+{
+    task_handle_ = std::move(task_handle);
+    //唤醒协程，因为task的initial_suspend 是suspend_always的
+    task_handle_.resume();
 }
 
 bool RecvDataAwaiter::await_ready()
@@ -187,6 +201,7 @@ void SendDataAwaiter::await_suspend(std::coroutine_handle<> h)
     else
     {
         conn_->write_context_.write_handle_ = h;
+        LOG_DEBUG("SendDataAwaiter high water mark triggered!");
     }
 }
 

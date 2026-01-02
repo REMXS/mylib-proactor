@@ -4,9 +4,10 @@
 
 #include "IoContext.h"
 #include "InputChainBuffer.h"
+#include "noncopyable.h"
 class TcpConnection;
 
-struct ReadContext:public IoContext
+struct ReadContext:public IoContext ,noncopyable
 {
     //提交了sqe避免tcp connection提前析构
     std::shared_ptr<TcpConnection>holder_;
@@ -35,7 +36,7 @@ struct ReadContext:public IoContext
     void on_completion()override;
 
     inline bool overLoad()const
-    {return input_buffer_.getTotalLen()>high_water_mark_||input_buffer_.getTotalLen()>high_water_mark_chunk_;}
+    {return input_buffer_.getTotalLen()>high_water_mark_||input_buffer_.getTotalChunk()>high_water_mark_chunk_;}
 
     inline bool isEmpty()const {return input_buffer_.getTotalLen()==0;}
 };

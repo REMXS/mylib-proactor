@@ -78,11 +78,20 @@ void IoUringLoop::_submitReadMultishut(IoContext* ctx)
     auto read_ctx = dynamic_cast<ReadContext*>(ctx);
     assert(read_ctx&&"dynamic_cast failed,check the upper layer logic");
 
-    io_uring_prep_read_multishot(sqe,read_ctx->fd_,CHUNK_SIZE,0,0);
+    uint16_t bgid = input_chunk_manager_->get_buf_group_id();
+
+    //BUG FIX: 
+    /*不要使用这个api: io_uring_prep_read_multishot(sqe, read_ctx->fd_,CHUNK_SIZE, 0, bgid);
+    在 Socket 上使用 RECV_MULTISHOT (Opcode 27) 比 READ_MULTISHOT (Opcode 50+) 兼容性更好，且不会报参数错误。
+
+    set_flags 是赋值，不是追加小心覆盖之前的标志
+    */
+    io_uring_prep_recv(sqe, read_ctx->fd_, nullptr, 0, 0);
+    sqe->flags |= IOSQE_BUFFER_SELECT;
     sqe->buf_group = input_chunk_manager_->get_buf_group_id();
+    sqe->ioprio |= IORING_RECV_MULTISHOT; // 记得加上这个标志
     
     io_uring_sqe_set_data(sqe,read_ctx);
-    io_uring_sqe_set_flags(sqe,IOSQE_BUFFER_SELECT);
 }
 
 void IoUringLoop::_submitWriteMsg(IoContext* ctx)
@@ -94,11 +103,9 @@ void IoUringLoop::_submitWriteMsg(IoContext* ctx)
     auto write_ctx = dynamic_cast<WriteContext*>(ctx);
     assert(write_ctx&&"dynamic_cast failed,check the upper layer logic");
 
-    msghdr msg{0};
-    msg.msg_iov=write_ctx->temp_data_.data();
-    msg.msg_iovlen=write_ctx->temp_data_.size();
-
-    io_uring_prep_sendmsg(sqe,write_ctx->fd_,&msg,0);
+    // BUG FIX: 不要使用局部变量 msghdr，因为它在函数返回后会失效，导致内核读取垃圾数据
+    // 改用 writev，直接使用 WriteContext 中持久化的 iovec 数组
+    io_uring_prep_writev(sqe, write_ctx->fd_, write_ctx->temp_data_.data(), write_ctx->temp_data_.size(), 0);
     io_uring_sqe_set_data(sqe,write_ctx);
 }
 
@@ -128,6 +135,7 @@ IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_ma
     ,wakeup_fd_(createEventFd())
     ,input_chunk_manager_(nullptr)
     ,thread_id_(CurrentThread::tid())
+    ,eventfd_data_addr_(std::make_unique<uint64_t>(0))
 {
     LOG_DEBUG("IoUringLoop created %p in thread %d", this, this->thread_id_);
     //one loop per thread,如果t_loopInThisThread不为空，说明当前线程已有一个实例
@@ -141,7 +149,6 @@ IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_ma
     io_uring_queue_init(ring_size,ring_,0);
     input_chunk_manager_ = std::make_unique<ChunkPoolManagerInput>(*this);
     
-
 }
 
 IoUringLoop::~IoUringLoop()
@@ -197,7 +204,11 @@ void IoUringLoop::loop()
             //但是考虑到上层的connection也要针对io_uring 单独设计，所以这样写感觉还可以
             auto&cqe=cqes_[i];
             //如果user_data为0，则说明这是一个取消任务等不需要任何cqe功能的任务,没有上下文
-            if(cqe->user_data==0) continue;
+            if(cqe->user_data==0)
+            {
+                LOG_DEBUG("no context cqe, res : %d flags: %u",(int)cqe->res,cqe->flags);
+                continue;
+            }
 
             IoContext*context = reinterpret_cast<IoContext*>(cqe->user_data);
             context->flags_ = cqe->flags;

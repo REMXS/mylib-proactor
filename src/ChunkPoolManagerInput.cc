@@ -31,7 +31,8 @@ ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
         exit(1);
     }
     
-    ring_size_ = pool_.chunks_ * sizeof(struct io_uring_buf);
+    //注意大小
+    ring_size_ = sizeof(struct io_uring_buf_ring) +pool_.chunks_ * sizeof(struct io_uring_buf);
     void* ring_mem = mmap(nullptr, ring_size_, PROT_READ | PROT_WRITE, 
                             MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
@@ -42,6 +43,9 @@ ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
 
     //获取input_buf_ring_
     input_buf_ring_ = (io_uring_buf_ring *)ring_mem;
+    // 【缺失的步骤】初始化 buffer ring 的控制结构（主要是 tail）
+    io_uring_buf_ring_init(input_buf_ring_);
+    
     //获取掩码
     input_buf_ring_mask_ = io_uring_buf_ring_mask(pool_.chunks_);
 
@@ -54,6 +58,7 @@ ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
     reg_.flags = 0;
 
     int ret = io_uring_register_buf_ring(loop_.ring_,&reg_,0);
+
     if(ret<0)
     {
         //处理错误
@@ -110,7 +115,8 @@ void ChunkPoolManagerInput::returnOneChunk(Chunk *chunk)
     );
     count_++;
     //如果计数器达到了一定次数则批量提交一次
-    if(count_>32)
+    //FIXME: 之前是32，但是由于总共只有64个chunk，导致大量buffer被滞留，引发ENOBUFS
+    if(count_>=1)
     {
         io_uring_buf_ring_advance(this->input_buf_ring_,count_);
         count_=0;

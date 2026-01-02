@@ -4,8 +4,8 @@
 
 
 //注意：io_uring中的buffer ring 大小必须是2的幂
-constexpr size_t CHUNK_SIZE = 16; // 4KB
-constexpr size_t POOL_SIZE = 16*64; // 64MB 预注册内存
+constexpr size_t CHUNK_SIZE = 4096; // 4KB
+constexpr size_t POOL_SIZE = 4096*64; // 64MB 预注册内存
 
 //链表的节点
 struct Chunk

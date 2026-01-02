@@ -15,11 +15,41 @@ struct Task
     {}
     ~Task()
     {
+        destroy();
+    }
+
+    void destroy()
+    {
         if(handle_)
         {
             handle_.destroy();
+            handle_= nullptr;
         }
     }
+
+    // 禁用复制
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+    
+    //BUG FIX 如果不自定义移动构造函数，原有的临时对象的handle_可能不会置为nullptr，从而导致协程直接销毁
+    // 允许移动
+    Task(Task&&other)
+        :handle_(other.handle_)
+    {
+        other.handle_ = nullptr;
+    }
+    Task& operator=(Task&&other)
+    {
+        this->handle_ = other.handle_;
+        other.handle_ = nullptr;
+        return *this;
+    }
+
+    void resume()
+    {
+        handle_.resume();
+    }
+
     struct promise_type
     {
         T curr_value;
@@ -74,10 +104,37 @@ struct Task<void>
     {}
     ~Task()
     {
+        destroy();
+    }
+    // 禁用复制
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+    
+    // 允许移动
+    Task(Task&&other)
+        :handle_(other.handle_)
+    {
+        other.handle_ = nullptr;
+    }
+    Task& operator=(Task&&other)
+    {
+        this->handle_ = other.handle_;
+        other.handle_ = nullptr;
+        return *this;
+    }
+
+    void destroy()
+    {
         if(handle_)
         {
             handle_.destroy();
+            handle_= nullptr;
         }
+    }
+
+    void resume()
+    {
+        handle_.resume();
     }
     
     struct promise_type

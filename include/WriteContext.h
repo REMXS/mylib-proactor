@@ -6,11 +6,12 @@
 
 #include "IoContext.h"
 #include "SendQueue.hpp"
+#include "noncopyable.h"
 
 class TcpConnection;
 
 //返回的cqe调用的就是这个类，所以这个类要决定返回后业务协程是否唤醒等一系列操作
-struct WriteContext:public IoContext
+struct WriteContext:public IoContext ,noncopyable
 {
     std::shared_ptr<TcpConnection>holder_;//在提交sqe后保活
     std::coroutine_handle<>write_handle_;//业务协程的句柄

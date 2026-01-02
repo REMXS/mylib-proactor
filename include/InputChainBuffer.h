@@ -48,4 +48,6 @@ public:
 
     size_t getTotalLen()const {return total_len_;}
 
+    size_t getTotalChunk()const {return chunks_;}
+
 };

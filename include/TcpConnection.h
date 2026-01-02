@@ -58,7 +58,6 @@ public:
     TcpConnection(
         std::string name,
         IoUringLoop&loop,
-        Task<>task_handle,
         int sockfd,
         InetAddress local_addr,
         InetAddress peer_addr,
@@ -88,6 +87,10 @@ public:
     inline ReadContext* getReadContext() {return &read_context_;}
     inline WriteContext* getWriteContext() {return &write_context_;}
     const std::string getName()const {return name_;}
+
+    void setCloseCallback(CloseCallback cb){close_callback_ = std::move(cb);}
+
+    void Established(Task<>task_handle);
 };
 
 

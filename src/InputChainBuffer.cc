@@ -1,5 +1,6 @@
 #include "InputChainBuffer.h"
 #include "ChunkPoolManagerInput.h"
+#include "Logger.h"
 
 bool InputChainBuffer::push_back(uint16_t index, int len)
 {
@@ -76,6 +77,8 @@ size_t InputChainBuffer::remove(char *target, size_t len)
             pop_front();
         }  
     }
+    
+    LOG_DEBUG("chunks : %lu",chunks_);
     total_len_-=read_count;
     return read_count;
 }

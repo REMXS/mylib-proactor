@@ -49,6 +49,7 @@ bool ReadContext::handleError()
         //buffer ring中的内存池资源耗尽
         case ENOBUFS:
             LOG_ERROR("Read buffer ring empty (ENOBUFS), waiting for buffers...");
+            // 视为高水位线触发的暂停，不关闭连接，等待用户消费数据后归还 Buffer
             return false;
         
         //资源暂时不可用，但是理论上不会出现这种情况
@@ -67,7 +68,7 @@ bool ReadContext::handleError()
             return false;
 
         default:
-            LOG_ERROR("unknown error happened");
+            LOG_ERROR("unknown error happened msg: %s",strerror(err));
             is_error_ = true;
             return true;
         }
@@ -77,6 +78,7 @@ bool ReadContext::handleError()
 
 void ReadContext::on_completion()
 {
+    LOG_DEBUG("ReadContext status : %d :res: %d",(int)status_,res_);
     //理论上在触发on_completion函数的时候因为要保证连接的生命周期，shared_ptr中是不为空的
     assert(holder_&&"the holder should not be nullptr,some logic is wrong");
 
@@ -105,16 +107,19 @@ void ReadContext::on_completion()
         //如果输入缓冲区的数据超过了其中一个高水位线且当前的状态不为canceling，则发送cancel sqe并转换状态
         if(overLoad()&&status_!=ReadStatus::CANCELING)
         {
+            LOG_DEBUG("ReadContext high water mark triggered!");
             holder_->submitCancel(this);
             status_ = ReadStatus::CANCELING;
         }
     }
 
     //如果multishut的cqe返回完毕，根据情况来判断是否需要重新提交
-    if(!(flags_&IORING_CQE_F_BUF_MORE))
+    //注意这个标志，不是IORING_CQE_F_BUF_MORE
+    if(!(flags_&IORING_CQE_F_MORE))
     {
         //状态为canceling且没有致命错误，说明是因为高水位线导致的停止，停止提交，应该通知协程处理数据
-        if(status_==ReadStatus::CANCELING&&!need_close)
+        //或者是因为 ENOBUFS 导致的停止，也应该暂停提交，等待用户消费数据
+        if(status_==ReadStatus::CANCELING && !need_close)
         {
             status_ = ReadStatus::STOPED;
             holder_.reset();
@@ -139,9 +144,10 @@ void ReadContext::on_completion()
 
     if(read_handle_)
     {
-        auto h = read_handle_;
+        auto handle = read_handle_;
         read_handle_=nullptr;
-        h.resume();
+        assert(!handle.done()&&"coroutine is done,some logic is wrong");
+        handle.resume();
     }
 }
 

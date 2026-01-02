@@ -106,9 +106,10 @@ public:
         auto holder = std::make_shared<T>(std::forward<Buffer>(data));
         tail_->ptr_ = holder->data();
         tail_->len_ = holder->size();
-        tail_->guard_ = std::move(holder);
 
-        total_len_ += data.size();
+        //BUG FIX 是holder->size()而不是data.size()
+        total_len_ += holder->size();
+        tail_->guard_ = std::move(holder);
     }
 
     void append(const char*data,size_t len)

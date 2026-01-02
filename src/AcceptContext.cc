@@ -49,6 +49,7 @@ bool AcceptContext::handleError()
 void AcceptContext::on_completion()
 {
     assert(is_accepting_&&"is_accepting_ should not be false, some logic is wrong");
+    LOG_DEBUG("AcceptContext res:%d flags:%u",res_,flags_);
 
     bool need_close = false;
     //处理错误
