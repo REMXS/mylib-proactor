@@ -15,6 +15,16 @@
 class Acceptor;
 class ChunkPoolManagerInput;
 
+
+struct IoUringLoopParams
+{
+    size_t ring_size_;
+    size_t cqes_size_;
+    size_t low_water_mark_;
+    
+    IoUringLoopParams()=default;
+};
+
 class IoUringLoop: noncopyable , IoContext
 {
 private:
@@ -76,6 +86,7 @@ private:
 
 public:
     IoUringLoop(size_t ring_size,size_t cqes_size,size_t low_water_mark = 32);
+    IoUringLoop(const IoUringLoopParams& params);
     ~IoUringLoop();
 
 

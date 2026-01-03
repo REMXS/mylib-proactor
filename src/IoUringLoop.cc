@@ -151,6 +151,10 @@ IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_ma
     
 }
 
+//直接参数包构造
+IoUringLoop::IoUringLoop(const IoUringLoopParams &params)
+    :IoUringLoop(params.ring_size_,params.cqes_size_,params.low_water_mark_){}
+
 IoUringLoop::~IoUringLoop()
 {
     ::close(this->wakeup_fd_);

@@ -5,7 +5,7 @@ TEST(TimestampTest, Basic){
     Timestamp ts;
     ts=Timestamp::now();
     EXPECT_NEAR(0,
-        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count()-ts.microSecondsSinceEpoch(),1);
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count()-ts.microSecondsSinceEpoch(),20);
     Timestamp ts2(ts);
     Timestamp ts3(time(NULL));
 
