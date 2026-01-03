@@ -91,6 +91,12 @@ public:
     void setCloseCallback(CloseCallback cb){close_callback_ = std::move(cb);}
 
     void Established(Task<>task_handle);
+
+    std::string name()const {return name_;}
+
+    IoUringLoop* getLoop()const {return &loop_;}
+
+    void Destroyed() {handleClose();}
 };
 
 
