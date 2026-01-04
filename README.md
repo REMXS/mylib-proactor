@@ -18,7 +18,7 @@
 
 ## 环境要求 (Requirements)
 
-由于使用了 `io_uring` 的高级特性和 C++23 标准，本项目对环境有较高要求：
+由于使用了 `io_uring` 的高级特性和 C++20 标准，本项目对环境有较高要求：
 
 * **操作系统**: Linux
 * **内核版本**: 建议 **Linux 5.19+** (推荐 6.x+)，因为使用了 `IORING_RECV_MULTISHOT` 和 Buffer Ring 等较新特性。
