@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15.0)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 
 aux_source_directory(./ SRC)
 find_package(PkgConfig REQUIRED)

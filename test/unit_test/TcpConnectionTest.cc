@@ -23,6 +23,8 @@ Task<> echo_server(std::shared_ptr<TcpConnection> conn)
             // 2. 读取数据
             // 这里简单读取所有可用数据，实际业务可能需要处理粘包
             std::string data = conn->read(size); 
+            //模拟慢消费，这个测试跑的太慢了，以后放到单独一个测试程序中
+            //std::this_thread::sleep_for(std::chrono::milliseconds(100));
             
             if (data.empty()) {
                 std::cout << "Connection closed by peer or empty read." << std::endl;

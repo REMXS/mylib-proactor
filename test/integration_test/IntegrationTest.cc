@@ -51,7 +51,8 @@ protected:
 
     static void TearDownTestSuite()
     {
-
+        tcp_server.reset();
+        base_loop.reset();
     }
 
     void SetUp()override
