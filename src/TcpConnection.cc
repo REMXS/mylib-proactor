@@ -178,6 +178,7 @@ int RecvDataAwaiter::await_resume()
     if(conn_->closing())
     {
         conn_->loop_.queueInLoop([conn_=conn_->getSharedPtr()](){conn_->Destroyed();});
+        return -1;
     }
     return conn_->read_context_.input_buffer_.getTotalLen();
 }
@@ -186,7 +187,7 @@ bool SendDataAwaiter::await_ready()
 {
     //如果连接已经关闭，直接返回
     if(conn_->closing()) return true;
-    
+
     //判断是否在当前的线程中，如果不在，直接挂起
     if(!conn_->loop_.isInLoopThread()) return false;
 
@@ -230,6 +231,7 @@ bool SendDataAwaiter::await_resume()
     if(conn_->closing())
     {
         conn_->loop_.queueInLoop([conn_=conn_->getSharedPtr()](){conn_->Destroyed();});
+        return false;
     }
     return !conn_->write_context_.isError();
 }
