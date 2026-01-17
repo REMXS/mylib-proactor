@@ -13,8 +13,13 @@ void TcpConnection::handleClose()
         closing_ = true;
         sock_.close();
 
-        //销毁协程
-        task_handle_.destroy();
+        /*如果业务协程并没有被read/write context阻塞挂起，则业务协程可能在其它线程中运行，这个时候不能直接
+          销毁协程，会出现未定义行为，要等到业务协程执行完毕，要读取或者是发送数据的时候在调用awaiter时
+          检查连接是否关闭，如果关闭则直接退出，然后向对应loop中加入销毁协程的任务*/
+        if(read_context_.read_handle_||write_context_.write_handle_)
+        {
+            task_handle_.destroy();
+        }
         //将相关的资源置空
         read_context_.read_handle_ = nullptr;
         write_context_.write_handle_ = nullptr;
@@ -23,6 +28,10 @@ void TcpConnection::handleClose()
         {
             close_callback_(ptr);
         }
+    }
+    else
+    {
+        task_handle_.destroy();
     }
 }
 
@@ -122,6 +131,9 @@ void TcpConnection::Established(Task<> task_handle)
 
 bool RecvDataAwaiter::await_ready()
 {
+    //如果连接已经关闭，直接返回
+    if(conn_->closing()) return true;
+
     //判断是否在当前的线程中，如果不在，直接挂起
     if(!conn_->loop_.isInLoopThread()) return false;
     //如果在loop线程，判断是否有数据可读，如果没有，就挂起
@@ -163,11 +175,18 @@ void RecvDataAwaiter::await_suspend(std::coroutine_handle<> h)
 int RecvDataAwaiter::await_resume()
 {
     if(conn_->read_context_.is_error_) return -1;
+    if(conn_->closing())
+    {
+        conn_->loop_.queueInLoop([conn_=conn_->getSharedPtr()](){conn_->Destroyed();});
+    }
     return conn_->read_context_.input_buffer_.getTotalLen();
 }
 
 bool SendDataAwaiter::await_ready()
 {
+    //如果连接已经关闭，直接返回
+    if(conn_->closing()) return true;
+    
     //判断是否在当前的线程中，如果不在，直接挂起
     if(!conn_->loop_.isInLoopThread()) return false;
 
@@ -208,6 +227,10 @@ void SendDataAwaiter::await_suspend(std::coroutine_handle<> h)
 //返回输出缓冲区是否出错，正确为true，错误为false
 bool SendDataAwaiter::await_resume()
 {
+    if(conn_->closing())
+    {
+        conn_->loop_.queueInLoop([conn_=conn_->getSharedPtr()](){conn_->Destroyed();});
+    }
     return !conn_->write_context_.isError();
 }
 

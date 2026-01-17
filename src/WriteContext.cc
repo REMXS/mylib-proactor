@@ -44,11 +44,6 @@ bool WriteContext::handleError()
         case EPIPE:
         case ECONNRESET:
             is_error_ = true;
-            if(write_handle_){
-                write_handle_.resume();
-            }
-            //通知连接进行关闭操作
-            holder_->handleClose();
             return true;
         
 
@@ -66,17 +61,12 @@ bool WriteContext::handleError()
         case EBADF:
         case ENOTCONN:
             is_error_ = true;
-            holder_->handleClose();
             return true;
 
         //其它的未知错误
         default:
             LOG_ERROR("unknown error happened error");
             is_error_ = true;
-            if(write_handle_){
-                write_handle_.resume();
-            }
-            holder_->handleClose();
             return true;
         
         }
@@ -112,6 +102,10 @@ void WriteContext::on_completion()
         is_sending_ = false;
         if(need_close)
         {
+            if(write_handle_){
+                write_handle_.resume();
+            }
+            holder_->handleClose();
             holder_.reset();
             is_sending_ = false;
             return;

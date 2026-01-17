@@ -96,6 +96,8 @@ public:
 
     IoUringLoop* getLoop()const {return &loop_;}
 
+    inline bool closing()const {return closing_;}
+
     void Destroyed() {handleClose();}
 };
 
