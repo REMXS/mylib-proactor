@@ -63,13 +63,10 @@ void TimerQueue::cancelTimerInLoop(TimerId timer_id)
 
     //删除节点
     ActiveTimer del_timer(timer_id.timer_,timer_id.sequence_);
-    if(is_running_callback_)
+    //如果删除失败而且正在执行定时器任务，则将定时器加入到将要取消任务的队列
+    if(!erase(del_timer)&&is_running_callback_)
     {
         canceling_timer_set_.emplace(del_timer);
-    }
-    else
-    {
-        erase(del_timer);
     }
 
     assert(timer_list_.size()==active_timer_set_.size());
@@ -84,14 +81,17 @@ void TimerQueue::handleRead(MonotonicTimestamp now)
     assert(timer_list_.size()==active_timer_set_.size());
 
     //获取所有过期的timer
-    std::vector<Entry>expired_timers=getExpiredTimers(now);
+    std::vector<std::unique_ptr<Timer>>expired_timers=getExpiredTimers(now);
+
+    //清除上一次累积的要删除的队列
+    canceling_timer_set_.clear();
 
     is_running_callback_ = true;
     //执行定时器的回调函数
-    for(auto&entry:expired_timers)
+    for(auto&timers:expired_timers)
     {
         //注意重入导致的迭代器失效问题
-        timer_list_[entry]->run();
+        timers->run();
     }
     is_running_callback_ = false;
 
@@ -101,10 +101,10 @@ void TimerQueue::handleRead(MonotonicTimestamp now)
     assert(timer_list_.size()==active_timer_set_.size());
 }
 
-std::vector<TimerQueue::Entry> TimerQueue::getExpiredTimers(MonotonicTimestamp now)
+std::vector<std::unique_ptr<Timer>> TimerQueue::getExpiredTimers(MonotonicTimestamp now)
 {
     assert(timer_list_.size()==active_timer_set_.size());
-    std::vector<Entry>ret;
+    std::vector<std::unique_ptr<Timer>>ret;
     Entry edge_entry(now,LLONG_MAX); 
     //获取第一个大于等于当前时间的定时器
     TimerList::iterator end = timer_list_.upper_bound(edge_entry);
@@ -112,40 +112,33 @@ std::vector<TimerQueue::Entry> TimerQueue::getExpiredTimers(MonotonicTimestamp n
     
     for(auto start = timer_list_.begin();start!=end;++start)
     {
-        ret.emplace_back(start->first);
+        ActiveTimer del_timer {start->second.get(),start->second->sequence()};
+        active_timer_set_.erase(del_timer);
+        ret.emplace_back(std::move(start->second));
     }
+
+    //优化：批量删除
+    timer_list_.erase(timer_list_.begin(),end);
 
     return ret;
 }
 
-void TimerQueue::reset(const std::vector<Entry> expired_timers, MonotonicTimestamp now)
+void TimerQueue::reset(std::vector<std::unique_ptr<Timer>>& expired_timers, MonotonicTimestamp now)
 {
-    for(auto&entry:expired_timers)
+    for(auto&timer:expired_timers)
     {
-        ActiveTimer temp_ac(timer_list_[entry].get(),entry.second);
+        ActiveTimer temp_ac{timer.get(),timer->sequence()};
         //如果是重复定时器，而且没有出现在canceling_timer_set_中，则重新定时
-        if(timer_list_[entry]->repeat()&&canceling_timer_set_.find(temp_ac)==canceling_timer_set_.end())
+        if(timer->repeat()&&canceling_timer_set_.find(temp_ac)==canceling_timer_set_.end())
         {
-            std::unique_ptr<Timer>temp_ptr = std::move(timer_list_[entry]);
-            temp_ptr->restart(now);
-            //擦除旧索引，构建新索引
-            timer_list_.erase(entry);
-            Entry new_entry(temp_ptr->expiration(),entry.second);
-            timer_list_[new_entry]=std::move(temp_ptr);
+            timer->restart(now);
+            //创建新索引
+            insert(std::move(timer));
         }
-        //如果不是，直接删除
-        else
-        {
-            erase(temp_ac);
-            canceling_timer_set_.erase(temp_ac);
-        }
+        //如果不是，直接删除。
+        //但是这里使用的是unique_ptr，所以等之后expired_timers销毁的时候会一起销毁，因此不用任何操作
+        
     }
-    //删除canceling_timer_set_中剩余的元素
-    for(auto&del_timer:canceling_timer_set_)
-    {
-        erase(del_timer);
-    }
-    canceling_timer_set_.clear();
 }
 
 bool TimerQueue::insert(std::unique_ptr<Timer> timer)
@@ -172,7 +165,7 @@ bool TimerQueue::insert(std::unique_ptr<Timer> timer)
     return is_earily_changed;
 }
 
-void TimerQueue::erase(ActiveTimer del_timer)
+bool TimerQueue::erase(ActiveTimer del_timer)
 {
     auto it = active_timer_set_.find(del_timer);
     if(it !=active_timer_set_.end())
@@ -181,7 +174,13 @@ void TimerQueue::erase(ActiveTimer del_timer)
 
         active_timer_set_.erase(del_timer);
         timer_list_.erase(del_entry);
+        return true;
     }
+    else
+    {
+        return false;
+    }
+    return false;
 }
 
 timespec TimerQueue::getRecentExpireTime(MonotonicTimestamp now)

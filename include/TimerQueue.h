@@ -37,13 +37,13 @@ private:
     void cancelTimerInLoop(TimerId timer_id);
 
     //获取过期的定时器
-    std::vector<Entry>getExpiredTimers(MonotonicTimestamp now);
+    std::vector<std::unique_ptr<Timer>>getExpiredTimers(MonotonicTimestamp now);
     //处理过期的定时器
-    void reset(const std::vector<Entry>expired_timers,MonotonicTimestamp now);
+    void reset(std::vector<std::unique_ptr<Timer>>&expired_timers,MonotonicTimestamp now);
     //内部插入timer的具体实现
     bool insert(std::unique_ptr<Timer> timer);
     //内部删除timer的具体实现
-    void erase(ActiveTimer del_timer);
+    bool erase(ActiveTimer del_timer);
 
 public:
     explicit TimerQueue(IoUringLoop& loop);
@@ -54,7 +54,7 @@ public:
 
     //具体执行操作的函数
     void handleRead(MonotonicTimestamp now=MonotonicTimestamp::now());
-    
+
     //获取当前最小的超时时间
     timespec getRecentExpireTime(MonotonicTimestamp now=MonotonicTimestamp::now());
 };
