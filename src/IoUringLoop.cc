@@ -9,6 +9,7 @@
 #include "ReadContext.h"
 #include "WriteContext.h"
 #include "AcceptContext.h"
+#include "TimerQueue.h"
 
 //防止一个线程创建多个eventloop
 //因为这个变量仅供内部判断使用，所以定义在实现文件，不对外暴露
@@ -69,7 +70,19 @@ void IoUringLoop::doingSubmitWaitingTask()
     }
 }
 
-void IoUringLoop::_submitReadMultishut(IoContext* ctx)
+__kernel_timespec IoUringLoop::getTimeOutPeriod()
+{
+    timespec expired_time = timer_queue_->getRecentExpireTime();
+    __kernel_timespec ts{time_out_.tv_sec, time_out_.tv_nsec};
+    if(expired_time.tv_sec<time_out_.tv_sec)
+    {
+        ts.tv_sec = expired_time.tv_sec;
+        ts.tv_nsec = expired_time.tv_nsec;
+    }
+    return ts;
+}
+
+void IoUringLoop::_submitReadMultishut(IoContext *ctx)
 {
     //这里理论上sqe是不为nullptr的
     auto sqe = getIoUringSqe(false);
@@ -136,6 +149,7 @@ IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_ma
     ,input_chunk_manager_(nullptr)
     ,thread_id_(CurrentThread::tid())
     ,eventfd_data_addr_(std::make_unique<uint64_t>(0))
+    ,timer_queue_(std::make_unique<TimerQueue>(*this))
 {
     LOG_DEBUG("IoUringLoop created %p in thread %d", this, this->thread_id_);
     //one loop per thread,如果t_loopInThisThread不为空，说明当前线程已有一个实例
@@ -160,6 +174,7 @@ IoUringLoop::~IoUringLoop()
     ::close(this->wakeup_fd_);
     io_uring_queue_exit(ring_);
     delete ring_;
+    t_loopInThisThread=nullptr;//重新设置此线程的eventloop对象为空指针
 }
 
 void IoUringLoop::loop()
@@ -180,7 +195,9 @@ void IoUringLoop::loop()
         int count = io_uring_peek_batch_cqe(ring_,cqes_.data(),cqes_.size());
         if(count == 0)
         {
-            __kernel_timespec ts{time_out_.tv_sec, time_out_.tv_nsec};
+            //获取超时时间
+            __kernel_timespec ts = getTimeOutPeriod();
+
             count = io_uring_wait_cqe_timeout(ring_,cqes_.data(),&ts);
             //处理错误
             if(count<0)
@@ -200,6 +217,8 @@ void IoUringLoop::loop()
 
         }
         LOG_DEBUG("%d events happend",count)
+        //处理定时器任务
+        timer_queue_->handleRead();
 
         //处理cqe中的返回数据
         for(int i=0;i<count;++i)
@@ -336,6 +355,26 @@ void IoUringLoop::submitCancel(IoContext *ctx)
 
     //这个请求时紧急请求，立即向内核提交一次
     io_uring_submit(ring_);
+}
+
+TimerId IoUringLoop::runAt(MonotonicTimestamp when, TimerCallback cb)
+{
+    return timer_queue_->addTimer(std::move(cb),when,0);
+}
+
+TimerId IoUringLoop::runAfter(double delay, TimerCallback cb)
+{
+    return timer_queue_->addTimer(std::move(cb),addTime(MonotonicTimestamp::now(),delay),0);
+}
+
+TimerId IoUringLoop::runEveny(double interval, TimerCallback cb)
+{
+    return timer_queue_->addTimer(std::move(cb),addTime(MonotonicTimestamp::now(),interval),interval);
+}
+
+void IoUringLoop::cancel(TimerId timer_id)
+{
+    timer_queue_->cancelTimer(timer_id);
 }
 
 void IoUringLoop::doingPendingFunctors()

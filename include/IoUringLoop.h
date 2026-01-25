@@ -9,12 +9,15 @@
 
 #include "noncopyable.h"
 #include "Timestamp.h"
+#include "MonotonicTimestamp.h"
 #include "CurrentThread.h"
 #include "IoContext.h"
+#include "TimerId.h"
+#include "Callbacks.h"
 
 class Acceptor;
 class ChunkPoolManagerInput;
-
+class TimerQueue;
 
 struct IoUringLoopParams
 {
@@ -76,6 +79,10 @@ private:
     std::queue<WaitEntry>waiting_submit_queue_;
     void doingSubmitWaitingTask();
 
+    //定时器相关
+    std::unique_ptr<TimerQueue>timer_queue_;
+    //获取最近的超时时间
+    __kernel_timespec getTimeOutPeriod();
 
     //内部实际执行的提交操作
     void _submitReadMultishut(IoContext* ctx);
@@ -83,10 +90,9 @@ private:
     void _submitAcceptMultishut(IoContext* ctx);
 
 public:
-    IoUringLoop(size_t ring_size,size_t cqes_size,size_t low_water_mark = 32);
+    IoUringLoop(size_t ring_size,size_t cqes_size,size_t low_water_mark = 0);
     IoUringLoop(const IoUringLoopParams& params);
     ~IoUringLoop();
-
 
     //开启事件循环
     void loop();
@@ -115,5 +121,15 @@ public:
     uint32_t remainedSqe()const {return io_uring_sq_space_left(ring_);}
 
     ChunkPoolManagerInput& getInputPool() {return *input_chunk_manager_;}
+
+    //定时器相关
+    //在固定时间执行定时任务,注意when应当是相对时间
+    TimerId runAt(MonotonicTimestamp when,TimerCallback cb);
+    //在当前时间之后执行定时任务
+    TimerId runAfter(double delay,TimerCallback cb);
+    //执行重复触发的定时任务
+    TimerId runEveny(double interval,TimerCallback cb);
+    //取消定时任务
+    void cancel(TimerId timer_id);
 };
 
