@@ -53,6 +53,7 @@ struct Task
     struct promise_type
     {
         T curr_value;
+        T ret_value;
         Task<T> get_return_object()
         {
             return Task<T>{std::coroutine_handle<promise_type>::from_promise(*this)};
@@ -68,10 +69,15 @@ struct Task
             return {};
         }
 
-        void return_value(){}
-        T yield_value(T&&value)
+        void return_value(T&&value)
+        {
+            ret_value = std::forward<T>(value);
+        }
+
+        std::suspend_always yield_value(T&&value)
         {
             curr_value =std::forward<T>(value);
+            return {};
         }
 
         void unhandled_exception()
@@ -89,6 +95,9 @@ struct Task
         
     };
 
+    //定义获取变量的方法
+    T currentValue(){return handle_.promise().curr_value;}
+    T returnValue(){return handle_.promise().ret_value;}
 };
 
 //特化一个void版本

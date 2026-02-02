@@ -1,5 +1,3 @@
-#pragma once
-
 #include "test_helper.h"
 #include "IoUringLoopThreadPool.h"
 #include "CurrentThread.h" 
