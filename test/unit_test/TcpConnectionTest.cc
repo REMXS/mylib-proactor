@@ -19,7 +19,10 @@ Task<> echo_server(std::shared_ptr<TcpConnection> conn)
             int size = co_await conn->PrepareToRead();
 
             //如果读取数据出错，就直接退出
-            if(size<0) break;
+            if(size<0)
+            {
+                break;
+            }
             // 2. 读取数据
             // 这里简单读取所有可用数据，实际业务可能需要处理粘包
             std::string data = conn->read(size); 
@@ -35,7 +38,8 @@ Task<> echo_server(std::shared_ptr<TcpConnection> conn)
             std::cout << "Recv from [" << conn->getName() << "]: " << data.size() << std::endl;
 
             // 3. 发送数据 (Echo)
-            co_await conn->send(data);
+            bool need_continue = co_await conn->send(data);
+            if(!need_continue) break;
         }
     } catch (const std::exception& e) {
         std::cout << "Exception in coroutine: " << e.what() << std::endl;
@@ -84,6 +88,9 @@ protected:
                 conn->Established(echo_server(conn));
 
                 std::cout << "New connection: " << name << std::endl;
+                //这里要把conn临时存储到一个容器中，否则在业务协程销毁时conn也会一起销毁，
+                //这样会造成访问已释放内存的问题
+                conns.emplace_back(conn);
             });
 
             acceptor->listen();
@@ -108,7 +115,7 @@ protected:
         acceptor.reset();
         loop.reset();
         loop_thread.reset();
-
+        conns.clear();
         port_++;
     }
 
@@ -116,6 +123,7 @@ protected:
     std::unique_ptr<Acceptor> acceptor;
     std::unique_ptr<IoUringLoop> loop;
     std::unique_ptr<std::thread> loop_thread;
+    std::vector<std::shared_ptr<TcpConnection>>conns;
     inline static uint16_t port_ = 8888;
 };
 
@@ -155,8 +163,10 @@ TEST_F(TcpConnectionTest, EchoFunctionality)
     EXPECT_EQ(response, msg);
 
     // 6. 关闭
-    close(client_fd);
-    
+    EXPECT_EQ(close(client_fd),0);
+    //这里要等待一段时间让连接关闭，不然会造成内存泄露
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
     // 7. 停止 Loop (在 TearDown 中也会调用，但这里显式调用更清晰)
     if(loop) loop->quit();
 }
@@ -226,7 +236,8 @@ TEST_F(TcpConnectionTest, LargeDataEcho)
     ASSERT_EQ(recv_data.size(), data_size);
     EXPECT_EQ(recv_data, send_data);
 
-    close(client_fd);
+    EXPECT_EQ(close(client_fd),0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     if(loop) loop->quit();
 }
 
