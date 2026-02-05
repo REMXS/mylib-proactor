@@ -27,7 +27,7 @@ protected:
 
     std::unique_ptr<IoUringLoop> baseLoop_;
     std::unique_ptr<IoUringLoopThreadPool> pool_;
-    IoUringLoopParams param{512,32,32};
+    IoUringLoopParams param{512,32,32,4096,16};
 };
 
 // 2. 测试单线程模式 (numThreads = 0)

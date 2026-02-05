@@ -21,9 +21,11 @@ class TimerQueue;
 
 struct IoUringLoopParams
 {
-    size_t ring_size_;
-    size_t cqes_size_;
-    size_t low_water_mark_;
+    size_t ring_size_;      //io_uring 队列的大小，会向上取整为2的n次方
+    size_t cqes_size_;      //一次循环接收cqe数量的上限
+    size_t low_water_mark_; //队列低水位线，当sqe数量低于这个数就会触发背压操作
+    size_t chunk_size_;     //buffer ring每一个内存块的大小
+    size_t chunk_num_;      //buffer ring中内存块的块数，注意要是2的n次方
 };
 
 class IoUringLoop: noncopyable , IoContext
@@ -43,6 +45,10 @@ private:
 
     //buffer ring的内存池
     std::unique_ptr<ChunkPoolManagerInput>input_chunk_manager_;
+    //buffer ring相关参数
+    //注意：io_uring中的buffer ring 大小必须是2的幂
+    const size_t CHUNK_SIZE;//每一个内存块的大小
+    const size_t CHUNK_NUM; //内存块的数量
 
 
     //每次循环调用poller时的时间点
@@ -90,7 +96,13 @@ private:
     void _submitAcceptMultishut(IoContext* ctx);
 
 public:
-    IoUringLoop(size_t ring_size,size_t cqes_size,size_t low_water_mark = 0);
+    /// @brief 构造函数
+    /// @param ring_size io_uring 队列的大小，会向上取整为2的n次方 
+    /// @param cqes_size 一次循环接收cqe数量的上限
+    /// @param low_water_mark 队列低水位线，当sqe数量低于这个数就会触发背压操作
+    /// @param chunk_size buffer ring每一个内存块的大小
+    /// @param chunk_num buffer ring中内存块的块数，注意要是2的n次方
+    IoUringLoop(size_t ring_size,size_t cqes_size,size_t low_water_mark,size_t chunk_size,size_t chunk_num);
     IoUringLoop(const IoUringLoopParams& params);
     ~IoUringLoop();
 

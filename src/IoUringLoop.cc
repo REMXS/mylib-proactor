@@ -137,7 +137,7 @@ void IoUringLoop::_submitAcceptMultishut(IoContext* ctx)
     io_uring_sqe_set_data(sqe,ctx);
 }
 
-IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_mark)
+IoUringLoop::IoUringLoop(size_t ring_size,size_t cqes_size,size_t low_water_mark,size_t chunk_size,size_t chunk_num)
     :ring_(new io_uring{})
     ,cqes_(cqes_size)
     ,looping_(false)
@@ -150,6 +150,8 @@ IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_ma
     ,thread_id_(CurrentThread::tid())
     ,eventfd_data_addr_(std::make_unique<uint64_t>(0))
     ,timer_queue_(std::make_unique<TimerQueue>(*this))
+    ,CHUNK_SIZE(chunk_size)
+    ,CHUNK_NUM(chunk_num)
 {
     LOG_DEBUG("IoUringLoop created %p in thread %d", this, this->thread_id_);
     //one loop per thread,如果t_loopInThisThread不为空，说明当前线程已有一个实例
@@ -159,6 +161,12 @@ IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_ma
     }
     t_loopInThisThread=this;
 
+    //检查chunk_num是否是2的n次方
+    if(chunk_num&(chunk_num-1))
+    {
+        LOG_FATAL("the num of chunk is not the power of 2!");
+    }
+
     //先初始化io_uring ,再初始化内存池
     io_uring_queue_init(ring_size,ring_,0);
     input_chunk_manager_ = std::make_unique<ChunkPoolManagerInput>(*this);
@@ -167,7 +175,7 @@ IoUringLoop::IoUringLoop(size_t ring_size, size_t cqes_size, size_t low_water_ma
 
 //直接参数包构造
 IoUringLoop::IoUringLoop(const IoUringLoopParams &params)
-    :IoUringLoop(params.ring_size_,params.cqes_size_,params.low_water_mark_){}
+    :IoUringLoop(params.ring_size_,params.cqes_size_,params.low_water_mark_,params.chunk_size_,params.chunk_num_){}
 
 IoUringLoop::~IoUringLoop()
 {

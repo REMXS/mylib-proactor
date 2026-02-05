@@ -2,11 +2,6 @@
 #include <iostream>
 #include <sys/mman.h>
 
-
-//注意：io_uring中的buffer ring 大小必须是2的幂
-constexpr size_t CHUNK_SIZE = 4096; // 4KB
-constexpr size_t POOL_SIZE = 4096*64; // 64MB 预注册内存
-
 //链表的节点
 struct Chunk
 {
@@ -21,9 +16,7 @@ struct Chunk
         ,index_(idx)
     {}
 
-    size_t capacity()const {return CHUNK_SIZE;}
     size_t readableBytes()const {return tail_-head_;}
-    size_t writableBytes()const {return CHUNK_SIZE-tail_;}
     void reset() {head_=tail_=0;next_=nullptr;}
 
     //返回可写位置的指针
@@ -39,9 +32,9 @@ struct ChunkPool
     const size_t bytes_;    //内存池的总内存大小
     const size_t chunks_;   //内存的块数
 
-    ChunkPool()
-        :bytes_(POOL_SIZE)
-        ,chunks_(POOL_SIZE/CHUNK_SIZE)
+    ChunkPool(size_t chunk_size,size_t chunk_num)
+        :bytes_(chunk_size*chunk_num)
+        ,chunks_(chunk_num)
         ,data_ptr_(nullptr)
     {
         //TODO 使用mmap分配地址，MAP_LOCKED为锁定内存，防止swap

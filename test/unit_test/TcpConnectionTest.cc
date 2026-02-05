@@ -57,7 +57,7 @@ protected:
         loop_thread = std::make_unique<std::thread>([&, p = std::move(p)]() mutable {
             // 1. 初始化 Loop
             // ring_size=1024, cqes_size=32 
-            loop = std::make_unique<IoUringLoop>(1024,32);
+            loop = std::make_unique<IoUringLoop>(1024,32,1,4096,32);
             // 2. 监听地址
             InetAddress listenAddr(port_);
             acceptor = std::make_unique<Acceptor>(loop.get(), listenAddr, true);

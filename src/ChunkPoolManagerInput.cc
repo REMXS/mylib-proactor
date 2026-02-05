@@ -11,7 +11,7 @@ uint16_t generateBid()
 
 ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
     :loop_(loop)
-    ,pool_()
+    ,pool_(loop.CHUNK_SIZE,loop.CHUNK_NUM)
     ,count_(0)
 {
     //分割内存成chunk，然后注册buffer ring
@@ -19,7 +19,7 @@ ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
 
     for(int i=0;i<pool_.chunks_;++i)
     {
-        chunks_data_[i]=Chunk(pool_.data_ptr_+CHUNK_SIZE*i,i);
+        chunks_data_[i]=Chunk(pool_.data_ptr_+loop.CHUNK_SIZE*i,i);
     }
 
     //注册buffer ring
@@ -72,7 +72,7 @@ ChunkPoolManagerInput::ChunkPoolManagerInput(IoUringLoop &loop)
         io_uring_buf_ring_add(
             input_buf_ring_,
             chunk.data_ptr_,
-            CHUNK_SIZE,
+            loop.CHUNK_SIZE,
             chunk.index_,
             input_buf_ring_mask_,
             chunk.index_
@@ -108,14 +108,14 @@ void ChunkPoolManagerInput::returnOneChunk(Chunk *chunk)
     io_uring_buf_ring_add(
         this->input_buf_ring_,
         chunk->data_ptr_,
-        CHUNK_SIZE,
+        loop_.CHUNK_SIZE,
         chunk->index_,
         this->input_buf_ring_mask_,
         count_
     );
     count_++;
     //如果计数器达到了一定次数则批量提交一次
-    //FIXME: 之前是32，但是由于总共只有64个chunk，导致大量buffer被滞留，引发ENOBUFS
+    //之前是32，但是如果总buffer数量太少，可能导致大量buffer被滞留，频繁引发ENOBUFS
     if(count_>=1)
     {
         io_uring_buf_ring_advance(this->input_buf_ring_,count_);

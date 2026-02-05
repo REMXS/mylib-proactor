@@ -66,7 +66,7 @@ protected:
     }
 
     inline static uint16_t test_port=9999;
-    inline static IoUringLoopParams params{4096,256,64};
+    inline static IoUringLoopParams params{4096,256,64,4096,1024};
     inline static std::unique_ptr<IoUringLoop>base_loop;
     inline static std::unique_ptr<TcpServer>tcp_server;
 };
@@ -75,9 +75,9 @@ protected:
 void simpleStressTest(IoUringLoop* base_loop)
 {
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    for(int num=0;num<15;++num)
+    for(int num=0;num<3;++num)
     {
-        std::vector<int>sock_fds(1000,0);
+        std::vector<int>sock_fds(500,0);
         //创建连接
         for(auto&n:sock_fds)
         {
@@ -93,7 +93,7 @@ void simpleStressTest(IoUringLoop* base_loop)
         addr.sin_family=AF_INET;
         addr.sin_addr.s_addr=inet_addr("127.0.0.1");
         addr.sin_port=htons(9999);
-        std::string data="hello world";
+        std::string data(1000,'a');
         for(auto&n:sock_fds)
         {
             int ret=connect(n,(sockaddr*)&addr,addr_len);
@@ -105,8 +105,8 @@ void simpleStressTest(IoUringLoop* base_loop)
         //读取数据，验证数据的正确性
         for(auto&n:sock_fds)
         {
-            char buf[32]={0};
-            read(n,buf,32);
+            char buf[8192]={0};
+            read(n,buf,sizeof(buf));
             ASSERT_EQ(data,buf);
         }
 

@@ -13,7 +13,7 @@ protected:
 
     void SetUp() override
     {
-        loop = std::make_unique<IoUringLoop>(1024,32);
+        loop = std::make_unique<IoUringLoop>(1024,32,1,4096,32);
     }
 
     void TearDown() override

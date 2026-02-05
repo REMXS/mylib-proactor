@@ -19,7 +19,7 @@ protected:
     {
         // 因为测试需要在一个线程中创建多个loop，所以要规避one loop per thread的检查
         std::thread t([&](){
-            loop_ = std::make_unique<IoUringLoop>(1024, 32);
+            loop_ = std::make_unique<IoUringLoop>(1024, 32,1,4096,32);
         });
         t.join();
         cpm_ = std::make_unique<ChunkPoolManagerInput>(*loop_);
