@@ -46,18 +46,19 @@ void IoUringLoop::doingSubmitWaitingTask()
            remainedSqe() > sqe_low_water_mark_ &&
            processed < max_process_per_loop) {
         
-        auto& [ctx, submit_type] = waiting_submit_queue_.front();
+        auto& ctx = waiting_submit_queue_.front();
         
         //处理任务
-        switch (submit_type) {
-            case SubmitType::ReadMultishut:
-                _submitReadMultishut(ctx);
+        switch (ctx->type_)
+        {
+            case ContextType::Read:
+                _submitReadMultishut(static_cast<ReadContext*>(ctx));
                 break;
-            case SubmitType::WriteMsg:
-                _submitWriteMsg(ctx);
+            case ContextType::Write:
+                _submitWriteMsg(static_cast<WriteContext*>(ctx));
                 break;
-            case SubmitType::AcceptMultishut:
-                _submitAcceptMultishut(ctx);
+            case ContextType::Accept:
+                _submitAcceptMultishut(static_cast<AcceptContext*>(ctx));
                 break;
         }
         
@@ -82,14 +83,11 @@ __kernel_timespec IoUringLoop::getTimeOutPeriod()
     return ts;
 }
 
-void IoUringLoop::_submitReadMultishut(IoContext *ctx)
+void IoUringLoop::_submitReadMultishut(ReadContext *read_ctx)
 {
     //这里理论上sqe是不为nullptr的
     auto sqe = getIoUringSqe(false);
     assert(sqe&&"the sqe should not be nullptr");
-
-    auto read_ctx = dynamic_cast<ReadContext*>(ctx);
-    assert(read_ctx&&"dynamic_cast failed,check the upper layer logic");
 
     uint16_t bgid = input_chunk_manager_->get_buf_group_id();
 
@@ -107,14 +105,11 @@ void IoUringLoop::_submitReadMultishut(IoContext *ctx)
     io_uring_sqe_set_data(sqe,read_ctx);
 }
 
-void IoUringLoop::_submitWriteMsg(IoContext* ctx)
+void IoUringLoop::_submitWriteMsg(WriteContext* write_ctx)
 {
     //这里理论上sqe是不为nullptr的
     auto sqe = getIoUringSqe(false);
     assert(sqe&&"the sqe should not be nullptr");
-
-    auto write_ctx = dynamic_cast<WriteContext*>(ctx);
-    assert(write_ctx&&"dynamic_cast failed,check the upper layer logic");
 
     // BUG FIX: 不要使用局部变量 msghdr，因为它在函数返回后会失效，导致内核读取垃圾数据
     // 改用 writev，直接使用 WriteContext 中持久化的 iovec 数组
@@ -122,23 +117,21 @@ void IoUringLoop::_submitWriteMsg(IoContext* ctx)
     io_uring_sqe_set_data(sqe,write_ctx);
 }
 
-void IoUringLoop::_submitAcceptMultishut(IoContext* ctx)
+void IoUringLoop::_submitAcceptMultishut(AcceptContext* accept_ctx)
 {
     //这里理论上sqe是不为nullptr的
     auto sqe = getIoUringSqe(false);
     assert(sqe&&"the sqe should not be nullptr");
 
-    auto accept_ctx = dynamic_cast<AcceptContext*>(ctx);
-    assert(accept_ctx&&"dynamic_cast failed,check the upper layer logic");
-
     //这里不能是局部变量
     static socklen_t len = sizeof(sockaddr); 
     io_uring_prep_multishot_accept(sqe,accept_ctx->fd_,(sockaddr*)&accept_ctx->addr_,&len,0);
-    io_uring_sqe_set_data(sqe,ctx);
+    io_uring_sqe_set_data(sqe,accept_ctx);
 }
 
 IoUringLoop::IoUringLoop(size_t ring_size,size_t cqes_size,size_t low_water_mark,size_t chunk_size,size_t chunk_num)
-    :ring_(new io_uring{})
+    :IoContext(ContextType::Wakeup)
+    ,ring_(new io_uring{})
     ,cqes_(cqes_size)
     ,looping_(false)
     ,quit_(false)
@@ -245,7 +238,26 @@ void IoUringLoop::loop()
             context->flags_ = cqe->flags;
             context->res_ = cqe->res;
 
-            context->on_completion();
+            //使用 Switch + Static Cast 替代虚函数 on_completion()
+            //能够极大减少分支预测失败的开销，并消除 vptr
+            switch (context->type_)
+            {
+                case ContextType::Read:
+                    static_cast<ReadContext*>(context)->on_completion();
+                    break;
+                case ContextType::Write:
+                    static_cast<WriteContext*>(context)->on_completion();
+                    break;
+                case ContextType::Accept:
+                    static_cast<AcceptContext*>(context)->on_completion();
+                    break;
+                case ContextType::Wakeup:
+                    static_cast<IoUringLoop*>(context)->on_completion();
+                    break;
+                default:
+                    LOG_ERROR("unknown context");
+                    break;
+            } 
         }
 
         //推进cq
@@ -312,12 +324,12 @@ void IoUringLoop::wakeUp()
     }
 }
 
-void IoUringLoop::submitReadMultishut(IoContext* ctx)
+void IoUringLoop::submitReadMultishut(ReadContext* ctx)
 {
     if(remainedSqe()<sqe_low_water_mark_)
     {
         waiting_submit_queue_
-            .emplace(WaitEntry{ctx,SubmitType::ReadMultishut});
+            .emplace(static_cast<IoContext*>(ctx));
     }
     else
     {
@@ -325,12 +337,12 @@ void IoUringLoop::submitReadMultishut(IoContext* ctx)
     }
 }
 
-void IoUringLoop::submitWriteMsg(IoContext* ctx)
+void IoUringLoop::submitWriteMsg(WriteContext* ctx)
 {
     if(remainedSqe()<sqe_low_water_mark_)
     {
         waiting_submit_queue_
-            .emplace(WaitEntry{ctx,SubmitType::WriteMsg});
+            .emplace(static_cast<IoContext*>(ctx));
     }
     else
     {
@@ -338,12 +350,12 @@ void IoUringLoop::submitWriteMsg(IoContext* ctx)
     }
 }
 
-void IoUringLoop::submitAcceptMultishut(IoContext* ctx)
+void IoUringLoop::submitAcceptMultishut(AcceptContext* ctx)
 {
     if(remainedSqe()<sqe_low_water_mark_)
     {
         waiting_submit_queue_
-            .emplace(WaitEntry{ctx,SubmitType::AcceptMultishut});
+            .emplace(static_cast<IoContext*>(ctx));
     }
     else
     {
@@ -351,7 +363,7 @@ void IoUringLoop::submitAcceptMultishut(IoContext* ctx)
     }
 }
 
-void IoUringLoop::submitCancel(IoContext *ctx)
+void IoUringLoop::submitCancel(ReadContext *ctx)
 {
     auto sqe = getIoUringSqe(true);
 

@@ -10,7 +10,8 @@
 //业务协程只能在状态为stoped的时候才可以继续提交请求
 
 ReadContext::ReadContext(size_t high_water_mark, size_t high_water_mark_chunk, int fd,ChunkPoolManagerInput&manager)
-    :high_water_mark_(high_water_mark)
+    :IoContext(ContextType::Read)
+    ,high_water_mark_(high_water_mark)
     ,high_water_mark_chunk_(high_water_mark_chunk)
     ,fd_(fd)
     ,status_(ReadStatus::STOPED)

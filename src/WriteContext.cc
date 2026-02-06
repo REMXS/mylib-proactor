@@ -5,7 +5,8 @@
 #include "Logger.h"
 
 WriteContext::WriteContext(size_t high_water_mark,int fd,size_t max_slices)
-    :high_water_mark_(high_water_mark)
+    :IoContext(ContextType::Write)
+    ,high_water_mark_(high_water_mark)
     ,max_slices_(max_slices)
     ,fd_(fd)
     ,holder_(nullptr)

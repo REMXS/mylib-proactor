@@ -33,7 +33,7 @@ struct ReadContext:public IoContext ,noncopyable
     
     bool handleError();
 
-    void on_completion()override;
+    void on_completion();
 
     inline bool overLoad()const
     {return input_buffer_.getTotalLen()>high_water_mark_||input_buffer_.getTotalChunk()>high_water_mark_chunk_;}

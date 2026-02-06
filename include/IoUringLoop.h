@@ -18,6 +18,9 @@
 class Acceptor;
 class ChunkPoolManagerInput;
 class TimerQueue;
+class ReadContext;
+class WriteContext;
+class AcceptContext;
 
 struct IoUringLoopParams
 {
@@ -67,21 +70,14 @@ private:
     int wakeup_fd_;
     //接收wakeupfd_数据的context
     std::unique_ptr<uint64_t>eventfd_data_addr_;
-    void on_completion()override;
+    void on_completion();
 
     //在每次循环结束的时候，执行任务队列中的额外任务，任务多为上层回调
     void doingPendingFunctors();
 
     io_uring_sqe* getIoUringSqe(bool force_submit);
 
-    //用于sqe耗尽时的背压操作相关的资源
-    enum class SubmitType
-    {
-        ReadMultishut,
-        WriteMsg,
-        AcceptMultishut
-    };
-    using WaitEntry = std::pair<IoContext*,SubmitType>;
+    using WaitEntry =IoContext*;
     std::queue<WaitEntry>waiting_submit_queue_;
     void doingSubmitWaitingTask();
 
@@ -91,9 +87,9 @@ private:
     __kernel_timespec getTimeOutPeriod();
 
     //内部实际执行的提交操作
-    void _submitReadMultishut(IoContext* ctx);
-    void _submitWriteMsg(IoContext* ctx);
-    void _submitAcceptMultishut(IoContext* ctx);
+    void _submitReadMultishut(ReadContext* ctx);
+    void _submitWriteMsg(WriteContext* ctx);
+    void _submitAcceptMultishut(AcceptContext* ctx);
 
 public:
     /// @brief 构造函数
@@ -125,10 +121,10 @@ public:
     //判断此eventloop知否在当前线程中
     bool isInLoopThread()const {return this->thread_id_==CurrentThread::tid();}
 
-    void submitReadMultishut(IoContext* ctx);
-    void submitWriteMsg(IoContext* ctx);
-    void submitAcceptMultishut(IoContext* ctx);
-    void submitCancel(IoContext* ctx);
+    void submitReadMultishut(ReadContext* ctx);
+    void submitWriteMsg(WriteContext* ctx);
+    void submitAcceptMultishut(AcceptContext* ctx);
+    void submitCancel(ReadContext* ctx);
 
     uint32_t remainedSqe()const {return io_uring_sq_space_left(ring_);}
 

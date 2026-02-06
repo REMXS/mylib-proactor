@@ -36,7 +36,7 @@ struct WriteContext:public IoContext ,noncopyable
     bool handleError();
 
     //cqe返回后调用的回调函数
-    void on_completion()override;
+    void on_completion();
 
     bool isError()const {return is_error_;}
 

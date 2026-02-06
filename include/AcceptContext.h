@@ -4,9 +4,10 @@
 #include <memory>
 
 #include "IoContext.h"
+#include "noncopyable.h"
 
 class Acceptor;
-struct AcceptContext: public IoContext
+struct AcceptContext: public IoContext, noncopyable
 {
     AcceptContext(sockaddr_in addr,int fd);
     ~AcceptContext();
@@ -21,5 +22,5 @@ struct AcceptContext: public IoContext
 
     bool handleError();
 
-    void on_completion()override;
+    void on_completion();
 };

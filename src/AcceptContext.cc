@@ -6,7 +6,8 @@
 #include "Logger.h"
 
 AcceptContext::AcceptContext(sockaddr_in addr, int fd)
-    :addr_(addr)
+    :IoContext(ContextType::Accept)
+    ,addr_(addr)
     ,fd_(fd)
     ,is_error_(false)
     ,is_accepting_(false)
