@@ -29,3 +29,5 @@ bin/
 lib/
 
 temp_doc/
+
+.cache

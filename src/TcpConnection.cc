@@ -88,13 +88,13 @@ TcpConnection::TcpConnection(
     ,read_context_(input_high_water_mark,input_high_water_mark_chunk,sockfd,loop.getInputPool())
     ,write_context_(out_put_high_water_mark,sockfd)
 {
-    LOG_INFO("new TCP connection created, name=%s, fd=%d",name_.c_str(),sockfd)
+    LOG_DEBUG("new TCP connection created, name=%s, fd=%d",name_.c_str(),sockfd)
     sock_.setKeepAlive(true);
 }
 
 TcpConnection::~TcpConnection()
 {
-    LOG_INFO("TCP connection destroyed, name=%s, fd=%d",name_.c_str(),sock_.fd());
+    LOG_DEBUG("TCP connection destroyed, name=%s, fd=%d",name_.c_str(),sock_.fd());
 }
 
 SendDataAwaiter TcpConnection::send(std::string data)

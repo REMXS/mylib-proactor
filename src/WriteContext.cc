@@ -107,8 +107,10 @@ void WriteContext::on_completion()
                 write_handle_.resume();
             }
             holder_->handleClose();
-            holder_.reset();
+            //注意：holder_ 可能是最后一个引用，reset() 之后 TcpConnection 会被立即析构，
+            //所有成员访问必须在 reset() 之前完成
             is_sending_ = false;
+            holder_.reset();
             return;
         }
     }

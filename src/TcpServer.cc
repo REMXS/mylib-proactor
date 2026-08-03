@@ -69,7 +69,7 @@ void TcpServer::newConnection(int sock_fd, InetAddress const &peer_addr)
 
     std::string conn_name=name_+buf;
 
-    LOG_INFO("%s [%s] new connection [%s] from %s",
+    LOG_DEBUG("%s [%s] new connection [%s] from %s",
         __FUNCTION__,name_.c_str(),conn_name.c_str(),peer_addr.toIpPort().c_str())
 
     //获取这个连接在本地的ip和端口
@@ -112,7 +112,7 @@ void TcpServer::removeConnection(const TcpConnectionPtr &tcp_connection_ptr)
 void TcpServer::removeConnectionInLoop(
     TcpConnectionPtr const &tcp_connection_ptr) 
 {
-    LOG_INFO("%s [%s] - connection %s",__FUNCTION__,name_.c_str(),tcp_connection_ptr->name().c_str())
+    LOG_DEBUG("%s [%s] - connection %s",__FUNCTION__,name_.c_str(),tcp_connection_ptr->name().c_str())
     
     //从本地清理连接的信息
     connection_map_.erase(tcp_connection_ptr->name());

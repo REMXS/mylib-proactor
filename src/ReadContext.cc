@@ -137,8 +137,11 @@ void ReadContext::on_completion()
                 read_handle_.resume();
             }
             holder_->handleClose();
-            holder_.reset();
+            //注意：holder_ 可能是持有连接的最后一个 shared_ptr，reset() 之后
+            //TcpConnection（连同内部的 ReadContext）会被立即析构，
+            //因此所有成员访问必须在 reset() 之前完成
             status_ = ReadStatus::STOPED;
+            holder_.reset();
             return;
         }
     }
