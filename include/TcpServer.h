@@ -38,6 +38,11 @@ private:
 
     CoroutineHandler coroutine_handler_;    //具体的业务协程
 
+    //连接级高水位参数 (可配置, 默认与 8KB chunk 池对齐: 256KB / 32 块 / 256KB)
+    size_t input_high_water_mark_{8192 * 32};      // 输入缓冲字节高水位
+    size_t input_high_water_mark_chunk_{32};       // 输入缓冲 chunk 数高水位
+    size_t output_high_water_mark_{8192 * 32};     // 输出缓冲字节高水位
+
 
     void newConnection(int sock_fd,const InetAddress&peer_addr);//用于建立新连接的函数，在acceptor中作为回调函数调用
     
@@ -66,6 +71,14 @@ public:
     void start();
 
     void setThreadNum(int thread_num); //设置线程池中的线程数量
+
+    //设置连接级高水位参数 (须在 start() 之前调用)
+    void setHighWaterMarks(size_t input_bytes, size_t input_chunks, size_t output_bytes)
+    {
+        input_high_water_mark_ = input_bytes;
+        input_high_water_mark_chunk_ = input_chunks;
+        output_high_water_mark_ = output_bytes;
+    }
 
     /*
     Pass-by-Value and Move 进行优化，

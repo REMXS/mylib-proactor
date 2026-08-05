@@ -31,3 +31,5 @@ lib/
 temp_doc/
 
 .cache
+
+bench_results/

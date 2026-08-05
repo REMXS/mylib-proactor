@@ -103,9 +103,15 @@ void WriteContext::on_completion()
         is_sending_ = false;
         if(need_close)
         {
-            if(write_handle_){
-                write_handle_.resume();
-            }
+            /*
+            修复: 原代码先 write_handle_.resume() 再 holder_->handleClose(),
+            协程在 closing_ 仍为 false 时被唤醒, 可能继续 echo 循环提交新的写 SQE
+            (此时 is_sending_ 已提前复位为 false), 形成两个写 SQE 同时在途;
+            随后 handleClose 里的 holder_.reset() 误杀了新 SQE 的引用,
+            新 SQE 的 CQE 返回时 holder_ 已空 -> 断言崩溃。
+            正确做法: 先由 handleClose() 设置 closing_ 标记并统一销毁业务协程
+            (task_handle_.destroy()), 协程不会被唤醒, 自然不会提交新 SQE。
+            */
             holder_->handleClose();
             //注意：holder_ 可能是最后一个引用，reset() 之后 TcpConnection 会被立即析构，
             //所有成员访问必须在 reset() 之前完成

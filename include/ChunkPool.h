@@ -38,6 +38,9 @@ struct ChunkPool
         ,data_ptr_(nullptr)
     {
         //TODO 使用mmap分配地址，MAP_LOCKED为锁定内存，防止swap
+        // 多级降级: 大页+锁定 -> 普通页+锁定 -> 普通页(不锁定)
+        // MAP_LOCKED 受 RLIMIT_MEMLOCK 限制(默认 64MB), 池子较大时易超限,
+        // 超限(EAGAIN)时应降级而非直接退出
         int flags = MAP_ANONYMOUS|MAP_PRIVATE|MAP_HUGETLB|MAP_LOCKED;
         data_ptr_ = (char*)mmap(nullptr,bytes_,PROT_READ|PROT_WRITE,flags,-1,0);
         //如果MAP_HUGETLB失败，则不开启大页优化
@@ -46,10 +49,17 @@ struct ChunkPool
             std::cerr<<"Warning: Huge pages failed, falling back to standard pages.\n";
             flags&= ~MAP_HUGETLB;
             data_ptr_ = (char*)mmap(nullptr,bytes_,PROT_READ|PROT_WRITE,flags,-1,0);
-            if (data_ptr_ == MAP_FAILED) {
-                perror("mmap failed");
-                exit(1);
-            }
+        }
+        //如果 MAP_LOCKED 失败(通常是 RLIMIT_MEMLOCK 超限), 去掉锁定重试
+        if(data_ptr_ ==MAP_FAILED)
+        {
+            std::cerr<<"Warning: MAP_LOCKED failed (RLIMIT_MEMLOCK?), falling back to unlocked pages.\n";
+            flags&= ~MAP_LOCKED;
+            data_ptr_ = (char*)mmap(nullptr,bytes_,PROT_READ|PROT_WRITE,flags,-1,0);
+        }
+        if (data_ptr_ == MAP_FAILED) {
+            perror("mmap failed");
+            exit(1);
         }
     }
     ~ChunkPool()

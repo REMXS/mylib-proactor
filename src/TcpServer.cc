@@ -85,7 +85,9 @@ void TcpServer::newConnection(int sock_fd, InetAddress const &peer_addr)
 
     
     //建立新连接
-    TcpConnectionPtr new_conn=std::make_shared<TcpConnection>(conn_name,*ioloop,sock_fd,local_a,peer_addr,4096*16,16,4096*16);
+    //使用可配置的高水位参数 (默认 256KB / 32块 / 256KB, 与 8KB chunk 池对齐)
+    TcpConnectionPtr new_conn=std::make_shared<TcpConnection>(conn_name,*ioloop,sock_fd,local_a,peer_addr,
+        input_high_water_mark_,input_high_water_mark_chunk_,output_high_water_mark_);
     
     //绑定回调函数
     new_conn->setCloseCallback([this](const TcpConnectionPtr&conn){removeConnection(conn);});
